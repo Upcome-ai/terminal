@@ -1,0 +1,110 @@
+@import "tailwindcss";
+
+/* --------------------------------------------------------------------------
+   Upcome terminal theme — Bloomberg-inspired: black canvas, amber primary,
+   dense monospace type, hairline dividers.
+   -------------------------------------------------------------------------- */
+@theme {
+  --color-term-bg: #000000;
+  --color-term-panel: #0a0a0a;
+  --color-term-panel-2: #111111;
+  --color-term-line: #1f1f1f;
+  --color-term-line-strong: #2e2e2e;
+
+  --color-amber: #ffa028;
+  --color-amber-dim: #b8720f;
+  --color-amber-glow: #ffb85c;
+
+  --color-term-text: #e6e1d8;
+  --color-term-muted: #8a8577;
+  --color-term-faint: #57534a;
+
+  --color-up: #35d07f;
+  --color-down: #ff5c5c;
+  --color-info: #4aa8ff;
+  --color-flash: #2a2205;
+
+  --font-mono: "DejaVu Sans Mono", "SFMono-Regular", "Menlo", "Consolas",
+    "Liberation Mono", monospace;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--color-term-bg);
+  color: var(--color-term-text);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.35;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overscroll-behavior: none;
+}
+
+/* Slim, dark scrollbars to match the terminal aesthetic. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-term-line-strong) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--color-term-line-strong);
+  border-radius: 0;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* New-event flash used by event rows. */
+@keyframes rowflash {
+  0% {
+    background-color: var(--color-flash);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+.row-flash {
+  animation: rowflash 1.4s ease-out 1;
+}
+
+/* Live indicator pulse. */
+@keyframes livepulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+.live-dot {
+  animation: livepulse 1.4s ease-in-out infinite;
+}
+
+/* Marquee ticker. */
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+.marquee-track {
+  animation: marquee 40s linear infinite;
+  will-change: transform;
+}
+.marquee-track:hover {
+  animation-play-state: paused;
+}
+
+.text-glow {
+  text-shadow: 0 0 6px rgba(255, 160, 40, 0.45);
+}
