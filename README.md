@@ -80,7 +80,6 @@ src/app/                    App Router entry, layout, global theme
 src/components/
   Terminal.tsx              Orchestrates columns, state, and the feed
   TopBar.tsx / StatusBar.tsx  Header + footer chrome
-  Ticker.tsx                Scrolling headline marquee
   CommandBar.tsx            Bloomberg-style command line + quick-add
   Column.tsx / EventRow.tsx Per-topic feed column and rows
 src/lib/

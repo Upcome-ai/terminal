@@ -9,14 +9,12 @@ import {
 } from "@/lib/types";
 import { useUpcomeSocket } from "@/lib/useUpcomeSocket";
 import { TopBar } from "./TopBar";
-import { Ticker } from "./Ticker";
 import { CommandBar } from "./CommandBar";
 import { Column } from "./Column";
 import { StatusBar } from "./StatusBar";
 
 const STORAGE_KEY = "upcome:columns:v1";
 const MAX_PER_TOPIC = 120;
-const MAX_RECENT = 40;
 
 const DEFAULT_COLUMNS: ColumnType[] = [
   { topic: GLOBAL_TOPIC, pinned: true },
@@ -44,7 +42,6 @@ export function Terminal() {
   const [eventsByTopic, setEventsByTopic] = useState<
     Record<string, UpcomeEvent[]>
   >({});
-  const [recent, setRecent] = useState<UpcomeEvent[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [hydrated, setHydrated] = useState(false);
 
@@ -75,7 +72,6 @@ export function Terminal() {
       const next = [event, ...bucket].slice(0, MAX_PER_TOPIC);
       return { ...prev, [event.topic]: next };
     });
-    setRecent((prev) => [event, ...prev].slice(0, MAX_RECENT));
     setTotalCount((c) => c + 1);
   }, []);
 
@@ -101,7 +97,6 @@ export function Terminal() {
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-term-bg">
       <TopBar status={status} />
-      <Ticker events={recent} />
       <CommandBar
         onSubmit={addColumn}
         existing={columns.map((c) => c.topic)}
