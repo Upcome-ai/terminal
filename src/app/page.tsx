@@ -1,5 +1,5 @@
-import { Terminal } from "@/components/Terminal";
+import { AuthGate } from "@/components/AuthGate";
 
 export default function Home() {
-  return <Terminal />;
+  return <AuthGate />;
 }

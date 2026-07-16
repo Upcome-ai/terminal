@@ -2,6 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  ApiError,
+  eventsWebSocketUrl,
+  displayEventsUrl,
+  registerInterest,
+} from "./api";
+import {
   ConnectionStatus,
   GLOBAL_TOPIC,
   normalizeEvent,
@@ -10,47 +16,58 @@ import {
 } from "./types";
 import { makeMockEvent } from "./mockEvents";
 
-const DEFAULT_WS_URL =
-  process.env.NEXT_PUBLIC_UPCOME_WS_URL ?? "ws://localhost:4001";
-
 /** How many connection attempts before we drop into the in-browser demo feed. */
 const MAX_ATTEMPTS = 3;
 
 interface Options {
-  /** Topics the user is subscribed to (excluding GLOBAL, which is implicit). */
-  subscriptions: string[];
+  /** Bearer session token used to authenticate the event stream. */
+  token: string;
+  /** Topics to register as interests and watch (includes GLOBAL). */
+  interests: string[];
   /** Called for every incoming event. */
   onEvent: (event: UpcomeEvent) => void;
+  /** Called when the backend rejects the token (e.g. it expired). */
+  onAuthError?: () => void;
 }
 
 interface SocketState {
   status: ConnectionStatus;
   /** Epoch millis of the most recent message, or null. */
   lastMessageAt: number | null;
-  /** The resolved feed URL. */
+  /** The resolved feed URL (token omitted). */
   url: string;
 }
 
 /**
- * Manages the connection to the Upcome live-event feed.
+ * Manages the connection to the authenticated Upcome event feed.
  *
  * Behaviour:
- *  - Opens a WebSocket to `NEXT_PUBLIC_UPCOME_WS_URL`.
- *  - Parses `{ topic, event, "more-info" }` frames and forwards them.
+ *  - Registers the user's column topics as interests over HTTP
+ *    (`POST /user/interests`).
+ *  - Opens a websocket to `/user/events?sessionToken=…` and forwards
+ *    `{ topic, event, "more-info" }` frames.
+ *  - Handles the `connection.ready` control frame.
  *  - Reconnects with exponential backoff on drop.
  *  - After a few failed attempts, falls back to a client-side demo feed so the
  *    terminal is never blank in an environment with no backend.
  */
-export function useUpcomeSocket({ subscriptions, onEvent }: Options): SocketState {
+export function useUpcomeSocket({
+  token,
+  interests,
+  onEvent,
+  onAuthError,
+}: Options): SocketState {
   const [status, setStatus] = useState<ConnectionStatus>("connecting");
   const [lastMessageAt, setLastMessageAt] = useState<number | null>(null);
 
   // Keep mutable refs so the long-lived connection effect never needs to
-  // re-run when subscriptions or the callback identity change.
+  // re-run when interests or the callback identity change.
   const onEventRef = useRef(onEvent);
-  const subsRef = useRef(subscriptions);
+  const onAuthErrorRef = useRef(onAuthError);
+  const interestsRef = useRef(interests);
   onEventRef.current = onEvent;
-  subsRef.current = subscriptions;
+  onAuthErrorRef.current = onAuthError;
+  interestsRef.current = interests;
 
   const wsRef = useRef<WebSocket | null>(null);
   const attemptsRef = useRef(0);
@@ -68,8 +85,9 @@ export function useUpcomeSocket({ subscriptions, onEvent }: Options): SocketStat
     if (demoTimerRef.current) return;
     setStatus("demo");
     const tick = () => {
-      // Always surface global news; sprinkle in subscribed topics.
-      const topics = [GLOBAL_TOPIC, GLOBAL_TOPIC, ...subsRef.current];
+      // Always surface global news; sprinkle in the user's other interests.
+      const others = interestsRef.current.filter((t) => t !== GLOBAL_TOPIC);
+      const topics = [GLOBAL_TOPIC, GLOBAL_TOPIC, ...others];
       const topic = topics[Math.floor(Math.random() * topics.length)];
       emit(makeMockEvent(topic));
     };
@@ -86,13 +104,15 @@ export function useUpcomeSocket({ subscriptions, onEvent }: Options): SocketStat
 
   // --- Live WebSocket --------------------------------------------------------
   useEffect(() => {
+    if (!token) return;
     closedByUnmount.current = false;
+    attemptsRef.current = 0;
 
     function connect() {
       if (closedByUnmount.current) return;
       let ws: WebSocket;
       try {
-        ws = new WebSocket(DEFAULT_WS_URL);
+        ws = new WebSocket(eventsWebSocketUrl(token));
       } catch {
         handleFailure();
         return;
@@ -104,19 +124,16 @@ export function useUpcomeSocket({ subscriptions, onEvent }: Options): SocketStat
         attemptsRef.current = 0;
         stopDemo();
         setStatus("live");
-        // Optional: announce interest to feeds that honour subscriptions.
-        try {
-          ws.send(
-            JSON.stringify({ action: "subscribe", topics: subsRef.current })
-          );
-        } catch {
-          /* feed may be broadcast-only; ignore */
-        }
       };
 
       ws.onmessage = (msg) => {
         try {
           const data = JSON.parse(msg.data as string);
+          // Control frame sent right after connect — not a news event.
+          if (data && data.type === "connection.ready") {
+            setStatus("live");
+            return;
+          }
           const frames: UpcomeWireEvent[] = Array.isArray(data) ? data : [data];
           for (const frame of frames) {
             if (frame && typeof frame.event === "string") emit(frame);
@@ -165,19 +182,43 @@ export function useUpcomeSocket({ subscriptions, onEvent }: Options): SocketStat
       }
       wsRef.current = null;
     };
-  }, [emit, startDemo, stopDemo]);
+  }, [token, emit, startDemo, stopDemo]);
 
-  // Forward subscription changes to a live feed.
+  // --- Interest registration (HTTP) -----------------------------------------
+  // Interests are registered over HTTP, not the websocket. Track what we've
+  // already sent so re-renders don't re-post the same topics.
+  const registeredRef = useRef<Set<string>>(new Set());
   useEffect(() => {
-    const ws = wsRef.current;
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      try {
-        ws.send(JSON.stringify({ action: "subscribe", topics: subscriptions }));
-      } catch {
-        /* noop */
-      }
-    }
-  }, [subscriptions]);
+    registeredRef.current = new Set();
+  }, [token]);
 
-  return { status, lastMessageAt, url: DEFAULT_WS_URL };
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    const pending = interests.filter((t) => !registeredRef.current.has(t));
+    if (pending.length === 0) return;
+
+    (async () => {
+      for (const topic of pending) {
+        if (cancelled) return;
+        try {
+          await registerInterest(token, topic);
+          registeredRef.current.add(topic);
+        } catch (err) {
+          if (err instanceof ApiError && err.status === 401) {
+            onAuthErrorRef.current?.();
+            return;
+          }
+          // Transient failure (e.g. backend down) — leave it unregistered so a
+          // later effect run retries it.
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [token, interests]);
+
+  return { status, lastMessageAt, url: displayEventsUrl() };
 }
