@@ -4,13 +4,30 @@ A **Bloomberg-style terminal for live events across the world**. Subscribe to a
 topic and it opens a column; that column fills with news for the topic as it
 crosses the wire. A pinned **GLOBAL** column for major world news is always on.
 
+Access requires signing in: the terminal is gated behind passwordless **email
+login** against the Upcome backend, and the live feed is streamed over an
+**authenticated** websocket tied to your account's registered interests.
+
 Built with the latest **Next.js 16** (App Router) and **Tailwind CSS v4**.
 
 ![Upcome terminal](docs/preview.png)
 
+## The backend
+
+The terminal talks to the Upcome backend (`NEXT_PUBLIC_UPCOME_API_URL`,
+default `http://localhost:7070`) for three things:
+
+- **Login** — `POST /auth/login-code` requests a one-time code by email, and
+  `POST /auth/session` exchanges the code for a bearer session token.
+- **Interests** — each open column is registered as a topic interest via
+  `POST /user/interests`.
+- **Events** — the authenticated websocket at
+  `ws(s)://<host>/user/events?sessionToken=…` streams updates for your
+  registered interests.
+
 ## The wire format
 
-The terminal connects to a WebSocket feed and renders JSON frames of the form:
+Once connected, the event websocket renders JSON frames of the form:
 
 ```json
 {
@@ -25,40 +42,50 @@ The terminal connects to a WebSocket feed and renders JSON frames of the form:
 - `event` — the headline shown in the feed.
 - `more-info` — a link to the full story (surfaced on row hover).
 
-The client may also send `{ "action": "subscribe", "topics": ["NVDA", "BTC"] }`
-when the user's columns change; feeds that honor it can filter, and
-broadcast-only feeds can simply ignore it.
+Interests are registered over HTTP, so the client does not push subscriptions
+over the websocket — opening a column calls `POST /user/interests` instead.
 
 ## Getting started
 
 ```bash
 npm install
 
-# Run the app + the bundled mock feed together:
+# Run the app + the bundled mock backend together:
 npm run dev:all
-# → http://localhost:3000  (feed: ws://localhost:4001)
+# → http://localhost:3000  (backend: http://localhost:7070)
 ```
 
 Or run them separately:
 
 ```bash
-npm run mock   # mock WebSocket feed on ws://localhost:4001
+npm run mock   # mock Upcome backend on http://localhost:7070
 npm run dev    # Next.js dev server on http://localhost:3000
 ```
 
-### Pointing at a real feed
+### Signing in
 
-Set the feed URL (copy `.env.example` to `.env.local`):
+The terminal opens on a login screen:
+
+1. Enter your email and press **Send login code**.
+2. Read the 6-digit code from your inbox — or, with the bundled mock backend,
+   from the **`npm run mock` terminal output** (it prints each code instead of
+   emailing it).
+3. Enter the code to unlock the terminal. Your session is stored in
+   `localStorage`; use **Logout** in the header to end it.
+
+### Pointing at a real backend
+
+Set the backend URL (copy `.env.example` to `.env.local`):
 
 ```bash
-NEXT_PUBLIC_UPCOME_WS_URL=wss://feed.your-upcome-host.io
+NEXT_PUBLIC_UPCOME_API_URL=https://api.your-upcome-host.io
 ```
 
 > `NEXT_PUBLIC_*` values are inlined at build time — set it before `npm run build`.
 
-If the feed can't be reached after a few attempts, the terminal drops into a
-built-in **demo feed** (generated in the browser) so it's never blank — the
-status pill in the header shows `DEMO FEED` when that happens.
+If the event stream can't be reached after a few attempts, the terminal drops
+into a built-in **demo feed** (generated in the browser) so it's never blank —
+the status pill in the header shows `DEMO FEED` when that happens.
 
 ## Using the terminal
 
@@ -75,16 +102,20 @@ feed URL, column/event counts, and time since the last message.
 ## Project layout
 
 ```
-server/mock-ws.mjs          Mock WebSocket feed (emits the wire format)
+server/mock-backend.mjs     Mock Upcome backend (Auth API + events websocket)
 src/app/                    App Router entry, layout, global theme
 src/components/
+  AuthGate.tsx              Shows the login screen until authenticated
+  LoginScreen.tsx           Email → code passwordless login flow
   Terminal.tsx              Orchestrates columns, state, and the feed
-  TopBar.tsx / StatusBar.tsx  Header + footer chrome
+  TopBar.tsx / StatusBar.tsx  Header + footer chrome (+ user / logout)
   CommandBar.tsx            Bloomberg-style command line + quick-add
   Column.tsx / EventRow.tsx Per-topic feed column and rows
 src/lib/
+  api.ts                    Backend client: login, session, interests, WS URL
+  auth.tsx                  Auth context + persisted session (useAuth)
   types.ts                  Wire + internal types, event normalization
-  useUpcomeSocket.ts        WebSocket connection, reconnect, demo fallback
+  useUpcomeSocket.ts        Authenticated feed: interests, reconnect, demo
   mockEvents.ts             Headline catalog for the in-browser demo feed
 ```
 

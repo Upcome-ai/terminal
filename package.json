@@ -5,8 +5,8 @@
   "description": "Upcome — a Bloomberg-style terminal for live events across the world.",
   "scripts": {
     "dev": "next dev",
-    "dev:all": "concurrently -n \"WS,WEB\" -c \"yellow,cyan\" \"npm run mock\" \"next dev\"",
-    "mock": "node server/mock-ws.mjs",
+    "dev:all": "concurrently -n \"API,WEB\" -c \"yellow,cyan\" \"npm run mock\" \"next dev\"",
+    "mock": "node server/mock-backend.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"

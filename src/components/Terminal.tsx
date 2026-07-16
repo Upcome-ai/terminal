@@ -8,6 +8,7 @@ import {
   UpcomeEvent,
 } from "@/lib/types";
 import { useUpcomeSocket } from "@/lib/useUpcomeSocket";
+import { useAuth } from "@/lib/auth";
 import { TopBar } from "./TopBar";
 import { CommandBar } from "./CommandBar";
 import { Column } from "./Column";
@@ -38,6 +39,7 @@ function loadColumns(): ColumnType[] {
 }
 
 export function Terminal() {
+  const { token, user, logout } = useAuth();
   const [columns, setColumns] = useState<ColumnType[]>(DEFAULT_COLUMNS);
   const [eventsByTopic, setEventsByTopic] = useState<
     Record<string, UpcomeEvent[]>
@@ -61,10 +63,9 @@ export function Terminal() {
     }
   }, [columns, hydrated]);
 
-  const subscriptions = useMemo(
-    () => columns.filter((c) => c.topic !== GLOBAL_TOPIC).map((c) => c.topic),
-    [columns]
-  );
+  // Every column topic is registered as an interest — including GLOBAL, so the
+  // pinned column receives major world news from the authenticated feed.
+  const interests = useMemo(() => columns.map((c) => c.topic), [columns]);
 
   const onEvent = useCallback((event: UpcomeEvent) => {
     setEventsByTopic((prev) => {
@@ -76,8 +77,10 @@ export function Terminal() {
   }, []);
 
   const { status, lastMessageAt, url } = useUpcomeSocket({
-    subscriptions,
+    token: token ?? "",
+    interests,
     onEvent,
+    onAuthError: logout,
   });
 
   const addColumn = useCallback((rawTopic: string) => {
@@ -96,7 +99,7 @@ export function Terminal() {
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-term-bg">
-      <TopBar status={status} />
+      <TopBar status={status} userEmail={user?.email ?? null} onLogout={logout} />
       <CommandBar
         onSubmit={addColumn}
         existing={columns.map((c) => c.topic)}

@@ -24,7 +24,15 @@ function useUtcClock() {
   return now;
 }
 
-export function TopBar({ status }: { status: ConnectionStatus }) {
+export function TopBar({
+  status,
+  userEmail,
+  onLogout,
+}: {
+  status: ConnectionStatus;
+  userEmail?: string | null;
+  onLogout?: () => void;
+}) {
   const now = useUtcClock();
   const meta = STATUS_META[status];
 
@@ -66,6 +74,25 @@ export function TopBar({ status }: { status: ConnectionStatus }) {
         <span className="hidden text-term-faint md:inline">|</span>
         <span className="tabular-nums text-term-muted">{date}</span>
         <span className="tabular-nums font-bold text-term-text">{clock}</span>
+
+        {userEmail && (
+          <>
+            <span className="hidden text-term-faint md:inline">|</span>
+            <span
+              className="hidden max-w-[180px] truncate text-term-muted lg:inline"
+              title={userEmail}
+            >
+              {userEmail}
+            </span>
+            <button
+              onClick={onLogout}
+              className="border border-term-line-strong px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-term-muted transition-colors hover:border-down hover:text-down"
+              title="Sign out"
+            >
+              Logout
+            </button>
+          </>
+        )}
       </div>
     </header>
   );
