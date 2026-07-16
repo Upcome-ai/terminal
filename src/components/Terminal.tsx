@@ -8,6 +8,7 @@ import {
   UpcomeEvent,
 } from "@/lib/types";
 import { useUpcomeSocket } from "@/lib/useUpcomeSocket";
+import { useNotificationSound } from "@/lib/useNotificationSound";
 import { useAuth } from "@/lib/auth";
 import { TopBar } from "./TopBar";
 import { CommandBar } from "./CommandBar";
@@ -67,14 +68,21 @@ export function Terminal() {
   // pinned column receives major world news from the authenticated feed.
   const interests = useMemo(() => columns.map((c) => c.topic), [columns]);
 
-  const onEvent = useCallback((event: UpcomeEvent) => {
-    setEventsByTopic((prev) => {
-      const bucket = prev[event.topic] ?? [];
-      const next = [event, ...bucket].slice(0, MAX_PER_TOPIC);
-      return { ...prev, [event.topic]: next };
-    });
-    setTotalCount((c) => c + 1);
-  }, []);
+  const { play: playChime, muted, toggleMuted } = useNotificationSound();
+
+  const onEvent = useCallback(
+    (event: UpcomeEvent) => {
+      setEventsByTopic((prev) => {
+        const bucket = prev[event.topic] ?? [];
+        const next = [event, ...bucket].slice(0, MAX_PER_TOPIC);
+        return { ...prev, [event.topic]: next };
+      });
+      setTotalCount((c) => c + 1);
+      // Audible cue for freshly arrived events (respects the mute toggle).
+      playChime();
+    },
+    [playChime],
+  );
 
   const { status, lastMessageAt, url } = useUpcomeSocket({
     token: token ?? "",
@@ -99,7 +107,13 @@ export function Terminal() {
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-term-bg">
-      <TopBar status={status} userEmail={user?.email ?? null} onLogout={logout} />
+      <TopBar
+        status={status}
+        userEmail={user?.email ?? null}
+        onLogout={logout}
+        soundMuted={muted}
+        onToggleSound={toggleMuted}
+      />
       <CommandBar
         onSubmit={addColumn}
         existing={columns.map((c) => c.topic)}
