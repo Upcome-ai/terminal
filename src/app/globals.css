@@ -88,23 +88,6 @@ body {
   animation: livepulse 1.4s ease-in-out infinite;
 }
 
-/* Marquee ticker. */
-@keyframes marquee {
-  from {
-    transform: translateX(0);
-  }
-  to {
-    transform: translateX(-50%);
-  }
-}
-.marquee-track {
-  animation: marquee 40s linear infinite;
-  will-change: transform;
-}
-.marquee-track:hover {
-  animation-play-state: paused;
-}
-
 .text-glow {
   text-shadow: 0 0 6px rgba(255, 160, 40, 0.45);
 }
