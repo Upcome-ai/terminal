@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 const MUTE_STORAGE_KEY = "upcome:sound-muted:v1";
 /** Don't fire more than one blip inside this window (feeds can burst). */
-const THROTTLE_MS = 120;
+const THROTTLE_MS = 150;
 
 function loadMuted(): boolean {
   if (typeof window === "undefined") return false;
@@ -16,8 +16,14 @@ function loadMuted(): boolean {
 }
 
 /**
- * A short terminal "blip" played when a new event lands, with a persisted
+ * A short terminal alert played when a new event lands, with a persisted
  * mute toggle.
+ *
+ * The tone is modelled on a trading-terminal message chime: a crisp, dry
+ * two-note "di-dit" (a rising perfect fourth) built from square-wave blips and
+ * run through a lowpass filter so it reads as a bright electronic alert rather
+ * than a harsh beep. It's short enough to fire on a busy wire without becoming
+ * grating.
  *
  * The sound is synthesised with the Web Audio API so there's no audio asset to
  * ship. The AudioContext is created lazily on the first {@link play} call —
@@ -62,22 +68,35 @@ export function useNotificationSound() {
       if (ctx.state === "suspended") void ctx.resume();
 
       const t = ctx.currentTime;
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
 
-      // Crisp, un-annoying two-note blip.
-      osc.type = "triangle";
-      osc.frequency.setValueAtTime(660, t);
-      osc.frequency.exponentialRampToValueAtTime(990, t + 0.06);
+      // A lowpass filter tames the square waves' upper harmonics so the alert
+      // sounds like a warm terminal chime rather than a piercing beep.
+      const filter = ctx.createBiquadFilter();
+      filter.type = "lowpass";
+      filter.frequency.setValueAtTime(2600, t);
+      filter.Q.setValueAtTime(0.7, t);
+      filter.connect(ctx.destination);
 
-      // Fast attack, quick exponential decay.
-      gain.gain.setValueAtTime(0.0001, t);
-      gain.gain.exponentialRampToValueAtTime(0.14, t + 0.008);
-      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
+      // One short square-wave blip at a fixed pitch. Fast attack, brief
+      // sustain, quick exponential release — dry and clicky like a wire tick.
+      const blip = (freq: number, start: number, dur: number, peak: number) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "square";
+        osc.frequency.setValueAtTime(freq, start);
+        gain.gain.setValueAtTime(0.0001, start);
+        gain.gain.exponentialRampToValueAtTime(peak, start + 0.006);
+        gain.gain.setValueAtTime(peak, start + dur * 0.55);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + dur);
+        osc.connect(gain).connect(filter);
+        osc.start(start);
+        osc.stop(start + dur + 0.02);
+      };
 
-      osc.connect(gain).connect(ctx.destination);
-      osc.start(t);
-      osc.stop(t + 0.2);
+      // "Di-dit" — a rising perfect fourth (B5 → E6). The second note is a hair
+      // brighter and shorter, giving the chime its signature terminal snap.
+      blip(987.77, t, 0.055, 0.11);
+      blip(1318.51, t + 0.072, 0.075, 0.12);
     } catch {
       /* audio is best-effort — never let it break the feed */
     }
