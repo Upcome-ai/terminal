@@ -9,6 +9,7 @@ import {
 } from "@/lib/types";
 import { useUpcomeSocket } from "@/lib/useUpcomeSocket";
 import { useNotificationSound } from "@/lib/useNotificationSound";
+import { useTopicCatalog } from "@/lib/useTopicCatalog";
 import { useAuth } from "@/lib/auth";
 import { TopBar } from "./TopBar";
 import { CommandBar } from "./CommandBar";
@@ -70,6 +71,15 @@ export function Terminal() {
 
   const { play: playChime, muted, toggleMuted } = useNotificationSound();
 
+  // The backend advertises which topics are on the wire; the command bar
+  // showcases them as quick-subscribe chips. GLOBAL is pinned already, so it's
+  // filtered out of the addable set.
+  const { topics: catalogTopics, loading: catalogLoading } = useTopicCatalog();
+  const subscribableTopics = useMemo(
+    () => catalogTopics.filter((t) => !t.global && t.topic !== GLOBAL_TOPIC),
+    [catalogTopics],
+  );
+
   const onEvent = useCallback(
     (event: UpcomeEvent) => {
       setEventsByTopic((prev) => {
@@ -117,6 +127,8 @@ export function Terminal() {
       <CommandBar
         onSubmit={addColumn}
         existing={columns.map((c) => c.topic)}
+        catalog={subscribableTopics}
+        catalogLoading={catalogLoading}
       />
 
       <main className="flex min-h-0 flex-1 gap-px overflow-x-auto bg-term-line px-px">

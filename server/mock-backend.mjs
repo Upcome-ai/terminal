@@ -7,6 +7,7 @@
  *
  *   POST /auth/login-code   Request a one-time email login code.
  *   POST /auth/session      Verify a code and create a bearer session.
+ *   GET  /topics            List the topics carried on the wire (public).
  *   GET  /user/interests    List the authenticated user's interests.
  *   POST /user/interests    Register a topic interest.
  *   WS   /user/events       Stream events for registered interests.
@@ -255,6 +256,19 @@ async function handleSession(req, res) {
   );
 }
 
+async function handleGetTopics(req, res) {
+  // The public catalog of topics carried on the wire. `headlines` is the number
+  // of distinct stories the backend can surface for the topic — a rough proxy
+  // for how actively it's covered. GLOBAL is flagged so clients can treat the
+  // always-on world-news topic specially.
+  const topics = Object.entries(CATALOG).map(([topic, headlines]) => ({
+    topic,
+    headlines: headlines.length,
+    global: topic === "GLOBAL",
+  }));
+  return sendJson(res, 200, { topics });
+}
+
 async function handleGetInterests(req, res) {
   const session = authenticate(req);
   if (!session) {
@@ -312,6 +326,9 @@ const server = createServer(async (req, res) => {
   }
   if (req.method === "POST" && pathname === "/auth/session") {
     return handleSession(req, res);
+  }
+  if (req.method === "GET" && pathname === "/topics") {
+    return handleGetTopics(req, res);
   }
   if (req.method === "GET" && pathname === "/user/interests") {
     return handleGetInterests(req, res);

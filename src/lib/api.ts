@@ -29,6 +29,16 @@ export interface AuthSession {
   user: SessionUser;
 }
 
+/** A topic carried on the wire, as advertised by the backend catalog. */
+export interface CatalogTopic {
+  /** Normalised topic symbol, e.g. "NVDA" or "GLOBAL". */
+  topic: string;
+  /** How many distinct stories the backend can surface for the topic. */
+  headlines: number;
+  /** True for the always-on major-world-news topic. */
+  global: boolean;
+}
+
 /** An error carrying the HTTP status and the server's message, if any. */
 export class ApiError extends Error {
   readonly status: number;
@@ -84,6 +94,31 @@ export async function verifyLoginCode(
   });
   if (!res.ok) await fail(res, "Invalid or expired login code.");
   return (await res.json()) as AuthSession;
+}
+
+/**
+ * List the topics the backend carries on the wire.
+ *
+ * This is a public catalog (no auth required) used to showcase what can be
+ * subscribed to. Returns an empty list if the backend is unreachable so the UI
+ * can fall back gracefully.
+ */
+export async function listTopics(): Promise<CatalogTopic[]> {
+  const res = await fetch(`${API_BASE}/topics`);
+  if (!res.ok) await fail(res, "Unable to load the topic catalog.");
+  const body = await res.json();
+  const raw: unknown = body?.topics;
+  if (!Array.isArray(raw)) return [];
+  return (raw as unknown[])
+    .filter(
+      (t): t is { topic: string; headlines?: unknown; global?: unknown } =>
+        !!t && typeof (t as { topic?: unknown }).topic === "string"
+    )
+    .map((t) => ({
+      topic: t.topic.trim().toUpperCase(),
+      headlines: typeof t.headlines === "number" ? t.headlines : 0,
+      global: t.global === true,
+    }));
 }
 
 /** List the authenticated user's registered topic interests. */
