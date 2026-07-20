@@ -151,9 +151,16 @@ export function useUpcomeSocket({
         }
       };
 
-      ws.onclose = () => {
+      ws.onclose = (event) => {
         wsRef.current = null;
         if (closedByUnmount.current) return;
+        // 1008 (policy violation) is how the Auth API signals a missing,
+        // invalid, or expired session token. Retrying can't help — surface it
+        // as an auth error so the app re-authenticates instead of reconnecting.
+        if (event.code === 1008) {
+          onAuthErrorRef.current?.();
+          return;
+        }
         handleFailure();
       };
     }
