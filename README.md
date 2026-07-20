@@ -2,7 +2,7 @@
 
 A **Bloomberg-style terminal for live events across the world**. Subscribe to a
 topic and it opens a column; that column fills with news for the topic as it
-crosses the wire. A pinned **GLOBAL** column for major world news is always on.
+crosses the wire. A pinned **WORLD** column for major world news is always on.
 
 Access requires signing in: the terminal is gated behind passwordless **email
 login** against the Upcome backend, and the live feed is streamed over an
@@ -42,7 +42,7 @@ Once connected, the event websocket renders JSON frames of the form:
 ```
 
 - `topic` — the symbol/topic the event belongs to. It's routed to the matching
-  column (case-insensitive). Events with topic `GLOBAL` feed the pinned column.
+  column (case-insensitive). Events with topic `WORLD` feed the pinned column.
 - `event` — the headline shown in the feed.
 - `more-info` — a link to the full story (surfaced on row hover).
 
@@ -96,7 +96,7 @@ the status pill in the header shows `DEMO FEED` when that happens.
 - **Open a column** — type a topic in the command line (`UPCOME>`) and press
   **GO** / Enter, or click a quick-add chip. The chips are a curated shortlist
   of common symbols; any other topic can be opened by typing it in.
-- **Close a column** — the `×` in a column header. The **GLOBAL** column is
+- **Close a column** — the `×` in a column header. The **WORLD** column is
   pinned and can't be closed.
 - **Open a story** — hover a row and click `more-info ↗`.
 - Your column layout is saved to `localStorage` and restored on reload.

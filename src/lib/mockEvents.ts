@@ -7,7 +7,7 @@ import type { UpcomeWireEvent } from "./types";
  * carries an equivalent catalog for local development.
  */
 const CATALOG: Record<string, string[]> = {
-  GLOBAL: [
+  WORLD: [
     "UN Security Council calls emergency session on energy corridor",
     "Global markets mixed as central banks signal rate pause",
     "Magnitude 6.1 quake reported off the Pacific coast, no tsunami warning",

@@ -99,7 +99,7 @@ function verifyJwt(token) {
 
 // --- Event catalog (Upcome wire format) -------------------------------------
 const CATALOG = {
-  GLOBAL: [
+  WORLD: [
     "UN Security Council calls emergency session on energy corridor",
     "Global markets mixed as central banks signal rate pause",
     "Magnitude 6.1 quake reported off the Pacific coast, no tsunami warning",
@@ -405,8 +405,8 @@ wss.on("connection", (ws) => {
     })
   );
 
-  // Send a quick burst of global backlog so new clients aren't empty.
-  for (let i = 0; i < 4; i++) ws.send(JSON.stringify(makeEvent("GLOBAL")));
+  // Send a quick burst of world backlog so new clients aren't empty.
+  for (let i = 0; i < 4; i++) ws.send(JSON.stringify(makeEvent("WORLD")));
 
   ws.on("close", () =>
     console.log(
@@ -416,14 +416,14 @@ wss.on("connection", (ws) => {
 });
 
 // Broadcast loop: for each connected client, emit one event biased toward the
-// user's registered interests, always mixing in global news.
+// user's registered interests, always mixing in world news.
 setInterval(() => {
   for (const ws of wss.clients) {
     if (ws.readyState !== ws.OPEN) continue;
     const subs = [...(interests.get(ws._email) ?? [])].filter(
-      (t) => t !== "GLOBAL"
+      (t) => t !== "WORLD"
     );
-    const bag = ["GLOBAL", "GLOBAL", "GLOBAL", ...subs];
+    const bag = ["WORLD", "WORLD", "WORLD", ...subs];
     const topic = bag[Math.floor(Math.random() * bag.length)];
     ws.send(JSON.stringify(makeEvent(topic)));
   }
