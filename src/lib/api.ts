@@ -14,29 +14,76 @@ const RAW_API_BASE =
 /** Backend base URL with any trailing slashes stripped. */
 export const API_BASE = RAW_API_BASE.replace(/\/+$/, "");
 
-/** The authenticated user returned by `POST /auth/session`. */
-export interface SessionUser {
-  id: string;
-  email: string;
-  createdAt: string;
-  lastSeenAt: string;
-}
-
-/** A verified session: the bearer token plus the user it belongs to. */
+/**
+ * A verified session, as returned by `POST /auth/session`.
+ *
+ * The bearer credential is a JWT: it is self-describing, so the signed-in
+ * user's identity is read from the token's claims rather than a separate
+ * `user` object (see {@link decodeJwt} / {@link sessionUser}).
+ */
 export interface AuthSession {
-  sessionToken: string;
+  jwt: string;
   tokenType: string;
-  user: SessionUser;
 }
 
-/** A topic carried on the wire, as advertised by the backend catalog. */
-export interface CatalogTopic {
-  /** Normalised topic symbol, e.g. "NVDA" or "GLOBAL". */
-  topic: string;
-  /** How many distinct stories the backend can surface for the topic. */
-  headlines: number;
-  /** True for the always-on major-world-news topic. */
-  global: boolean;
+/** The signed-in user, derived from the JWT claims. */
+export interface SessionUser {
+  /** Stable user id (the JWT `sub` claim). */
+  id: string;
+  /** The user's email (the JWT `email` claim). */
+  email: string;
+}
+
+/** Claims we read out of the session JWT. */
+export interface JwtClaims {
+  sub?: string;
+  email?: string;
+  iat?: number;
+  /** Expiry, in seconds since the epoch. */
+  exp?: number;
+}
+
+/**
+ * Decode (without verifying) the payload of a JWT.
+ *
+ * Signature verification is the backend's job; the client only needs the
+ * claims to display the user and know when the token has expired.
+ */
+export function decodeJwt(token: string): JwtClaims | null {
+  const parts = token.split(".");
+  if (parts.length !== 3) return null;
+  try {
+    const json =
+      typeof atob === "function"
+        ? atob(base64UrlToBase64(parts[1]))
+        : Buffer.from(parts[1], "base64url").toString("utf8");
+    const claims = JSON.parse(json) as JwtClaims;
+    return claims && typeof claims === "object" ? claims : null;
+  } catch {
+    return null;
+  }
+}
+
+function base64UrlToBase64(value: string): string {
+  const padded = value.padEnd(
+    value.length + ((4 - (value.length % 4)) % 4),
+    "="
+  );
+  return padded.replace(/-/g, "+").replace(/_/g, "/");
+}
+
+/** True once the JWT's `exp` claim is in the past. */
+export function isJwtExpired(claims: JwtClaims | null): boolean {
+  return !!claims && typeof claims.exp === "number" && claims.exp * 1000 <= Date.now();
+}
+
+/** Derive the signed-in {@link SessionUser} from a session JWT, if valid. */
+export function sessionUser(token: string): SessionUser | null {
+  const claims = decodeJwt(token);
+  if (!claims || typeof claims.email !== "string" || isJwtExpired(claims)) {
+    return null;
+  }
+  return { id: claims.sub ?? claims.email, email: claims.email };
 }
 
 /** An error carrying the HTTP status and the server's message, if any. */
@@ -93,32 +140,14 @@ export async function verifyLoginCode(
     body: JSON.stringify({ email, code }),
   });
   if (!res.ok) await fail(res, "Invalid or expired login code.");
-  return (await res.json()) as AuthSession;
-}
-
-/**
- * List the topics the backend carries on the wire.
- *
- * This is a public catalog (no auth required) used to showcase what can be
- * subscribed to. Returns an empty list if the backend is unreachable so the UI
- * can fall back gracefully.
- */
-export async function listTopics(): Promise<CatalogTopic[]> {
-  const res = await fetch(`${API_BASE}/topics`);
-  if (!res.ok) await fail(res, "Unable to load the topic catalog.");
   const body = await res.json();
-  const raw: unknown = body?.topics;
-  if (!Array.isArray(raw)) return [];
-  return (raw as unknown[])
-    .filter(
-      (t): t is { topic: string; headlines?: unknown; global?: unknown } =>
-        !!t && typeof (t as { topic?: unknown }).topic === "string"
-    )
-    .map((t) => ({
-      topic: t.topic.trim().toUpperCase(),
-      headlines: typeof t.headlines === "number" ? t.headlines : 0,
-      global: t.global === true,
-    }));
+  if (!body || typeof body.jwt !== "string") {
+    throw new ApiError("The server returned an unexpected session.", res.status);
+  }
+  return {
+    jwt: body.jwt,
+    tokenType: typeof body.tokenType === "string" ? body.tokenType : "Bearer",
+  };
 }
 
 /** List the authenticated user's registered topic interests. */

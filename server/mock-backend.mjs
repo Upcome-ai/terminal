@@ -6,8 +6,7 @@
  * Auth API surface:
  *
  *   POST /auth/login-code   Request a one-time email login code.
- *   POST /auth/session      Verify a code and create a bearer session.
- *   GET  /topics            List the topics carried on the wire (public).
+ *   POST /auth/session      Verify a code and exchange it for a JWT.
  *   GET  /user/interests    List the authenticated user's interests.
  *   POST /user/interests    Register a topic interest.
  *   WS   /user/events       Stream events for registered interests.
@@ -20,7 +19,7 @@
  * http://localhost:7070).
  */
 import { createServer } from "http";
-import { createHash, randomUUID } from "crypto";
+import { createHash, createHmac } from "crypto";
 import { WebSocketServer } from "ws";
 
 const PORT = Number(process.env.PORT ?? 7070);
@@ -30,16 +29,23 @@ const CODE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 const RESEND_COOLDOWN_MS = 60 * 1000; // 60 seconds
 const MAX_ATTEMPTS = 5;
 
+// --- Session (JWT) rules ----------------------------------------------------
+// The Auth API hands out a JWT rather than an opaque token. It's signed with a
+// throwaway secret and carries the user identity as claims, so authentication
+// is stateless — every protected request/upgrade is validated by verifying the
+// token, with no server-side session table to look up.
+const JWT_SECRET = process.env.JWT_SECRET ?? "upcome-mock-dev-secret";
+const SESSION_TTL_SECONDS = 7 * 24 * 60 * 60; // 7 days
+
 // --- In-memory state --------------------------------------------------------
 /** email -> { code, expiresAt, attempts, sentAt } */
 const challenges = new Map();
-/** token -> { email, user } */
-const sessions = new Map();
 /** email -> Set<topic> */
 const interests = new Map();
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const TOPIC_RE = /^[A-Z0-9._:-]{1,100}$/;
+// Documented topic rules: letters, numbers, `.`, `_`, `-`, max 50 chars.
+const TOPIC_RE = /^[A-Z0-9._-]{1,50}$/;
 
 function normalizeEmail(value) {
   return typeof value === "string" ? value.trim().toLowerCase() : "";
@@ -52,6 +58,43 @@ function userIdFor(email) {
     16,
     20
   )}-${h.slice(20, 32)}`;
+}
+
+// --- Minimal HS256 JWT helpers ----------------------------------------------
+const b64url = (input) => Buffer.from(input).toString("base64url");
+
+function signJwt(claims) {
+  const header = b64url(JSON.stringify({ alg: "HS256", typ: "JWT" }));
+  const payload = b64url(JSON.stringify(claims));
+  const signature = createHmac("sha256", JWT_SECRET)
+    .update(`${header}.${payload}`)
+    .digest("base64url");
+  return `${header}.${payload}.${signature}`;
+}
+
+/** Verify a JWT's signature and expiry; returns its claims or null. */
+function verifyJwt(token) {
+  if (typeof token !== "string") return null;
+  const parts = token.split(".");
+  if (parts.length !== 3) return null;
+  const [header, payload, signature] = parts;
+  const expected = createHmac("sha256", JWT_SECRET)
+    .update(`${header}.${payload}`)
+    .digest("base64url");
+  // Constant-time-ish comparison; length guard avoids timingSafeEqual throws.
+  if (signature.length !== expected.length || signature !== expected) {
+    return null;
+  }
+  let claims;
+  try {
+    claims = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+  } catch {
+    return null;
+  }
+  if (typeof claims.exp === "number" && claims.exp * 1000 <= Date.now()) {
+    return null; // expired
+  }
+  return claims;
 }
 
 // --- Event catalog (Upcome wire format) -------------------------------------
@@ -168,10 +211,15 @@ function bearerToken(req) {
   return match ? match[1].trim() : null;
 }
 
+/** Resolve the authenticated user from a bearer JWT, or null. */
 function authenticate(req) {
-  const token = bearerToken(req);
-  if (!token) return null;
-  return sessions.get(token) ?? null;
+  const claims = verifyJwt(bearerToken(req));
+  if (!claims || typeof claims.email !== "string") return null;
+  return { email: claims.email, user: userFromClaims(claims) };
+}
+
+function userFromClaims(claims) {
+  return { id: claims.sub, email: claims.email };
 }
 
 // --- Route handlers ---------------------------------------------------------
@@ -202,9 +250,7 @@ async function handleLoginCode(req, res) {
     `[upcome-mock] login code for ${email}: \x1b[1;33m${code}\x1b[0m (valid 10m)`
   );
 
-  return sendJson(res, 202, {
-    message: "If the email is valid, a login code has been sent.",
-  });
+  return sendJson(res, 202, { message: "Login code sent" });
 }
 
 async function handleSession(req, res) {
@@ -238,35 +284,20 @@ async function handleSession(req, res) {
   challenges.delete(email);
   if (!interests.has(email)) interests.set(email, new Set());
 
-  const nowIso = new Date(now).toISOString();
-  const user = {
-    id: userIdFor(email),
+  const issuedAt = Math.floor(now / 1000);
+  const jwt = signJwt({
+    sub: userIdFor(email),
     email,
-    createdAt: nowIso,
-    lastSeenAt: nowIso,
-  };
-  const sessionToken = randomUUID().replaceAll("-", "");
-  sessions.set(sessionToken, { email, user });
+    iat: issuedAt,
+    exp: issuedAt + SESSION_TTL_SECONDS,
+  });
 
   return sendJson(
     res,
     200,
-    { sessionToken, tokenType: "Bearer", user },
+    { jwt, tokenType: "Bearer" },
     { "Cache-Control": "no-store" }
   );
-}
-
-async function handleGetTopics(req, res) {
-  // The public catalog of topics carried on the wire. `headlines` is the number
-  // of distinct stories the backend can surface for the topic — a rough proxy
-  // for how actively it's covered. GLOBAL is flagged so clients can treat the
-  // always-on world-news topic specially.
-  const topics = Object.entries(CATALOG).map(([topic, headlines]) => ({
-    topic,
-    headlines: headlines.length,
-    global: topic === "GLOBAL",
-  }));
-  return sendJson(res, 200, { topics });
 }
 
 async function handleGetInterests(req, res) {
@@ -327,9 +358,6 @@ const server = createServer(async (req, res) => {
   if (req.method === "POST" && pathname === "/auth/session") {
     return handleSession(req, res);
   }
-  if (req.method === "GET" && pathname === "/topics") {
-    return handleGetTopics(req, res);
-  }
   if (req.method === "GET" && pathname === "/user/interests") {
     return handleGetInterests(req, res);
   }
@@ -349,16 +377,16 @@ server.on("upgrade", (req, socket, head) => {
     socket.destroy();
     return;
   }
-  const token = url.searchParams.get("sessionToken");
-  const session = token ? sessions.get(token) : null;
-  if (!session) {
-    // 4401 = application-level "unauthorized".
-    socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
-    socket.destroy();
-    return;
-  }
+  const claims = verifyJwt(url.searchParams.get("sessionToken"));
   wss.handleUpgrade(req, socket, head, (ws) => {
-    ws._email = session.email;
+    // Per the Auth API: a missing/invalid/expired JWT completes the handshake
+    // and is then closed with WebSocket code 1008 (policy violation), rather
+    // than being rejected at the HTTP layer.
+    if (!claims || typeof claims.email !== "string") {
+      ws.close(1008, "Invalid or expired session token.");
+      return;
+    }
+    ws._email = claims.email;
     wss.emit("connection", ws, req);
   });
 });
@@ -373,7 +401,6 @@ wss.on("connection", (ws) => {
   ws.send(
     JSON.stringify({
       type: "connection.ready",
-      connectedAt: new Date().toISOString(),
       interests: [...set],
     })
   );

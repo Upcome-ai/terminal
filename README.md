@@ -15,18 +15,19 @@ Built with the latest **Next.js 16** (App Router) and **Tailwind CSS v4**.
 ## The backend
 
 The terminal talks to the Upcome backend (`NEXT_PUBLIC_UPCOME_API_URL`,
-default `http://localhost:7070`) for four things:
+default `http://localhost:7070`) for three things:
 
 - **Login** — `POST /auth/login-code` requests a one-time code by email, and
-  `POST /auth/session` exchanges the code for a bearer session token.
-- **Topic catalog** — `GET /topics` lists the topics carried on the wire. The
-  command bar showcases these as quick-subscribe chips (with a story count per
-  topic) instead of a hard-coded list.
+  `POST /auth/session` exchanges the code for a **JWT**. The signed-in user's
+  identity is read from the token's claims.
 - **Interests** — each open column is registered as a topic interest via
-  `POST /user/interests`.
+  `POST /user/interests`; `GET /user/interests` lists them.
 - **Events** — the authenticated websocket at
   `ws(s)://<host>/user/events?sessionToken=…` streams updates for your
-  registered interests.
+  registered interests. A missing, invalid, or expired token is closed with
+  WebSocket code `1008`.
+
+The full contract lives in [`docs/auth-api.md`](docs/auth-api.md).
 
 ## The wire format
 
@@ -93,9 +94,8 @@ the status pill in the header shows `DEMO FEED` when that happens.
 ## Using the terminal
 
 - **Open a column** — type a topic in the command line (`UPCOME>`) and press
-  **GO** / Enter, or click a quick-add chip. The chips are the topics the
-  backend advertises on the wire (`GET /topics`); if the catalog can't be
-  reached the bar falls back to a built-in shortlist.
+  **GO** / Enter, or click a quick-add chip. The chips are a curated shortlist
+  of common symbols; any other topic can be opened by typing it in.
 - **Close a column** — the `×` in a column header. The **GLOBAL** column is
   pinned and can't be closed.
 - **Open a story** — hover a row and click `more-info ↗`.
@@ -117,11 +117,10 @@ src/components/
   CommandBar.tsx            Bloomberg-style command line + quick-add
   Column.tsx / EventRow.tsx Per-topic feed column and rows
 src/lib/
-  api.ts                    Backend client: login, session, topics, interests
+  api.ts                    Backend client: login, session (JWT), interests
   auth.tsx                  Auth context + persisted session (useAuth)
   types.ts                  Wire + internal types, event normalization
   useUpcomeSocket.ts        Authenticated feed: interests, reconnect, demo
-  useTopicCatalog.ts        Loads the backend topic catalog (GET /topics)
   useNotificationSound.ts   Synthesised terminal alert chime + mute toggle
   mockEvents.ts             Headline catalog for the in-browser demo feed
 ```

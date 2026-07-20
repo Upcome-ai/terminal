@@ -8,7 +8,7 @@ import {
   useMemo,
   useState,
 } from "react";
-import { AuthSession, SessionUser } from "./api";
+import { AuthSession, SessionUser, decodeJwt, isJwtExpired, sessionUser } from "./api";
 
 /** localStorage key holding the persisted session. */
 const SESSION_KEY = "upcome:session:v1";
@@ -36,14 +36,15 @@ function loadSession(): AuthSession | null {
     const raw = window.localStorage.getItem(SESSION_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as AuthSession;
-    if (
-      parsed &&
-      typeof parsed.sessionToken === "string" &&
-      parsed.user &&
-      typeof parsed.user.email === "string"
-    ) {
-      return parsed;
+    // A persisted session must carry a JWT that is well-formed and not expired.
+    if (parsed && typeof parsed.jwt === "string") {
+      const claims = decodeJwt(parsed.jwt);
+      if (claims && typeof claims.email === "string" && !isJwtExpired(claims)) {
+        return parsed;
+      }
     }
+    // Anything stale or malformed is discarded so the user re-authenticates.
+    window.localStorage.removeItem(SESSION_KEY);
     return null;
   } catch {
     return null;
@@ -83,17 +84,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const value = useMemo<AuthContextValue>(
-    () => ({
+  const value = useMemo<AuthContextValue>(() => {
+    const token = session?.jwt ?? null;
+    return {
       hydrated,
       session,
-      token: session?.sessionToken ?? null,
-      user: session?.user ?? null,
+      token,
+      // The user identity lives in the JWT claims, not a separate field.
+      user: token ? sessionUser(token) : null,
       login,
       logout,
-    }),
-    [hydrated, session, login, logout]
-  );
+    };
+  }, [hydrated, session, login, logout]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
