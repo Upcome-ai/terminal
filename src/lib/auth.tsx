@@ -37,9 +37,12 @@ function loadSession(): AuthSession | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as AuthSession;
     // A persisted session must carry a JWT that is well-formed and not expired.
+    // The user's identity is derived separately for display (see sessionUser);
+    // a token that omits the optional `email` claim is still a valid session and
+    // must survive a reload, exactly as it does right after login.
     if (parsed && typeof parsed.jwt === "string") {
       const claims = decodeJwt(parsed.jwt);
-      if (claims && typeof claims.email === "string" && !isJwtExpired(claims)) {
+      if (claims && !isJwtExpired(claims)) {
         return parsed;
       }
     }
