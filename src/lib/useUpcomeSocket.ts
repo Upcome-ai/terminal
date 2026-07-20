@@ -9,7 +9,7 @@ import {
 } from "./api";
 import {
   ConnectionStatus,
-  GLOBAL_TOPIC,
+  WORLD_TOPIC,
   normalizeEvent,
   UpcomeEvent,
   UpcomeWireEvent,
@@ -22,7 +22,7 @@ const MAX_ATTEMPTS = 3;
 interface Options {
   /** Bearer session token used to authenticate the event stream. */
   token: string;
-  /** Topics to register as interests and watch (includes GLOBAL). */
+  /** Topics to register as interests and watch (includes WORLD). */
   interests: string[];
   /** Called for every incoming event. */
   onEvent: (event: UpcomeEvent) => void;
@@ -85,9 +85,9 @@ export function useUpcomeSocket({
     if (demoTimerRef.current) return;
     setStatus("demo");
     const tick = () => {
-      // Always surface global news; sprinkle in the user's other interests.
-      const others = interestsRef.current.filter((t) => t !== GLOBAL_TOPIC);
-      const topics = [GLOBAL_TOPIC, GLOBAL_TOPIC, ...others];
+      // Always surface world news; sprinkle in the user's other interests.
+      const others = interestsRef.current.filter((t) => t !== WORLD_TOPIC);
+      const topics = [WORLD_TOPIC, WORLD_TOPIC, ...others];
       const topic = topics[Math.floor(Math.random() * topics.length)];
       emit(makeMockEvent(topic));
     };

@@ -1,10 +1,10 @@
 "use client";
 
-import { GLOBAL_TOPIC, UpcomeEvent } from "@/lib/types";
+import { WORLD_TOPIC, UpcomeEvent } from "@/lib/types";
 import { EventRow } from "./EventRow";
 
 const TOPIC_LABELS: Record<string, string> = {
-  [GLOBAL_TOPIC]: "GLOBAL — MAJOR WORLD NEWS",
+  [WORLD_TOPIC]: "WORLD — MAJOR WORLD NEWS",
 };
 
 export function Column({
@@ -18,19 +18,19 @@ export function Column({
   events: UpcomeEvent[];
   onRemove: (topic: string) => void;
 }) {
-  const isGlobal = topic === GLOBAL_TOPIC;
+  const isWorld = topic === WORLD_TOPIC;
   const label = TOPIC_LABELS[topic] ?? topic;
 
   return (
     <section
       className={`flex min-h-0 shrink-0 flex-col bg-term-panel ${
-        isGlobal ? "w-[360px]" : "w-[320px]"
+        isWorld ? "w-[360px]" : "w-[320px]"
       }`}
     >
       {/* Header */}
       <div
         className={`flex h-8 shrink-0 items-center justify-between border-b px-2.5 ${
-          isGlobal
+          isWorld
             ? "border-amber-dim bg-[#150e02]"
             : "border-term-line-strong bg-term-panel-2"
         }`}
@@ -38,7 +38,7 @@ export function Column({
         <div className="flex min-w-0 items-center gap-2">
           <span
             className={`truncate text-[12px] font-bold tracking-wider ${
-              isGlobal ? "text-amber text-glow" : "text-amber"
+              isWorld ? "text-amber text-glow" : "text-amber"
             }`}
           >
             {label}
@@ -70,8 +70,8 @@ export function Column({
       <div className="min-h-0 flex-1 overflow-y-auto">
         {events.length === 0 ? (
           <div className="flex h-full items-center justify-center px-4 text-center text-[11px] text-term-faint">
-            {isGlobal
-              ? "Awaiting global headlines…"
+            {isWorld
+              ? "Awaiting world headlines…"
               : `No events yet for ${topic}. Watching the wire…`}
           </div>
         ) : (

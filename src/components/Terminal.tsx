@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Column as ColumnType,
   ConnectionStatus,
-  GLOBAL_TOPIC,
+  WORLD_TOPIC,
   UpcomeEvent,
 } from "@/lib/types";
 import { useUpcomeSocket } from "@/lib/useUpcomeSocket";
@@ -19,7 +19,7 @@ const STORAGE_KEY = "upcome:columns:v1";
 const MAX_PER_TOPIC = 120;
 
 const DEFAULT_COLUMNS: ColumnType[] = [
-  { topic: GLOBAL_TOPIC, pinned: true },
+  { topic: WORLD_TOPIC, pinned: true },
   { topic: "NVDA", pinned: false },
   { topic: "BTC", pinned: false },
 ];
@@ -31,9 +31,9 @@ function loadColumns(): ColumnType[] {
     if (!raw) return DEFAULT_COLUMNS;
     const parsed = JSON.parse(raw) as ColumnType[];
     if (!Array.isArray(parsed) || parsed.length === 0) return DEFAULT_COLUMNS;
-    // Guarantee the GLOBAL column is always present and pinned first.
-    const rest = parsed.filter((c) => c.topic !== GLOBAL_TOPIC);
-    return [{ topic: GLOBAL_TOPIC, pinned: true }, ...rest];
+    // Guarantee the WORLD column is always present and pinned first.
+    const rest = parsed.filter((c) => c.topic !== WORLD_TOPIC);
+    return [{ topic: WORLD_TOPIC, pinned: true }, ...rest];
   } catch {
     return DEFAULT_COLUMNS;
   }
@@ -64,7 +64,7 @@ export function Terminal() {
     }
   }, [columns, hydrated]);
 
-  // Every column topic is registered as an interest — including GLOBAL, so the
+  // Every column topic is registered as an interest — including WORLD, so the
   // pinned column receives major world news from the authenticated feed.
   const interests = useMemo(() => columns.map((c) => c.topic), [columns]);
 
@@ -101,7 +101,7 @@ export function Terminal() {
   }, []);
 
   const removeColumn = useCallback((topic: string) => {
-    if (topic === GLOBAL_TOPIC) return;
+    if (topic === WORLD_TOPIC) return;
     setColumns((prev) => prev.filter((c) => c.topic !== topic));
   }, []);
 

@@ -17,7 +17,7 @@ export interface UpcomeWireEvent {
 export interface UpcomeEvent {
   /** Stable client-side id. */
   id: string;
-  /** Normalised topic symbol, e.g. "NVDA" or "GLOBAL". */
+  /** Normalised topic symbol, e.g. "NVDA" or "WORLD". */
   topic: string;
   /** Headline text. */
   event: string;
@@ -27,14 +27,14 @@ export interface UpcomeEvent {
   receivedAt: number;
 }
 
-/** The always-on major-global-news topic. */
-export const GLOBAL_TOPIC = "GLOBAL";
+/** The always-on major-world-news topic. */
+export const WORLD_TOPIC = "WORLD";
 
 /** A subscribed column in the terminal. */
 export interface Column {
   /** Topic symbol this column tracks. */
   topic: string;
-  /** Whether the column is pinned (the GLOBAL column can't be removed). */
+  /** Whether the column is pinned (the WORLD column can't be removed). */
   pinned: boolean;
 }
 
@@ -47,7 +47,7 @@ export type ConnectionStatus =
 
 /** Convert a raw wire event into the terminal's internal shape. */
 export function normalizeEvent(raw: UpcomeWireEvent): UpcomeEvent {
-  const topic = (raw.topic || GLOBAL_TOPIC).trim().toUpperCase();
+  const topic = (raw.topic || WORLD_TOPIC).trim().toUpperCase();
   return {
     id:
       globalThis.crypto?.randomUUID?.() ??
