@@ -59,6 +59,11 @@ Success — `200 OK`:
 }
 ```
 
+The JWT is cached per user and reused for its whole lifetime: verifying a code
+again while a previously issued token is still valid returns that same token
+rather than minting a new one. A fresh JWT is only signed once the cached one
+has expired.
+
 Errors:
 
 - `400 Bad Request` — the email or code is missing.

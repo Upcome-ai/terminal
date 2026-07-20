@@ -42,6 +42,15 @@ const SESSION_TTL_SECONDS = 7 * 24 * 60 * 60; // 7 days
 const challenges = new Map();
 /** email -> Set<topic> */
 const interests = new Map();
+/**
+ * email -> { jwt, exp } — the session JWT most recently issued to a user.
+ *
+ * Verifying an emailed code hands out a JWT that stays valid for its whole
+ * lifetime, so there is no reason to mint a new one every time the same user
+ * re-verifies. We cache the issued token and reuse it until it expires, only
+ * signing a fresh JWT once the cached one has aged out.
+ */
+const sessions = new Map();
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // Documented topic rules: letters, numbers, `.`, `_`, `-`, max 50 chars.
@@ -70,6 +79,24 @@ function signJwt(claims) {
     .update(`${header}.${payload}`)
     .digest("base64url");
   return `${header}.${payload}.${signature}`;
+}
+
+/**
+ * Return a valid session JWT for `email`, reusing the token issued on a
+ * previous verification while it is still within its lifetime and only minting
+ * a fresh one once the cached token has expired.
+ */
+function sessionTokenFor(email) {
+  const now = Date.now();
+  const cached = sessions.get(email);
+  if (cached && cached.exp * 1000 > now) {
+    return cached.jwt;
+  }
+  const issuedAt = Math.floor(now / 1000);
+  const exp = issuedAt + SESSION_TTL_SECONDS;
+  const jwt = signJwt({ sub: userIdFor(email), email, iat: issuedAt, exp });
+  sessions.set(email, { jwt, exp });
+  return jwt;
 }
 
 /** Verify a JWT's signature and expiry; returns its claims or null. */
@@ -284,13 +311,9 @@ async function handleSession(req, res) {
   challenges.delete(email);
   if (!interests.has(email)) interests.set(email, new Set());
 
-  const issuedAt = Math.floor(now / 1000);
-  const jwt = signJwt({
-    sub: userIdFor(email),
-    email,
-    iat: issuedAt,
-    exp: issuedAt + SESSION_TTL_SECONDS,
-  });
+  // Reuse the user's cached JWT while it is still valid; only mint a new one
+  // once it has expired.
+  const jwt = sessionTokenFor(email);
 
   return sendJson(
     res,
