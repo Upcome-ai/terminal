@@ -42,8 +42,7 @@ export type ConnectionStatus =
   | "connecting"
   | "live"
   | "reconnecting"
-  | "offline"
-  | "demo";
+  | "offline";
 
 /** Convert a raw wire event into the terminal's internal shape. */
 export function normalizeEvent(raw: UpcomeWireEvent): UpcomeEvent {

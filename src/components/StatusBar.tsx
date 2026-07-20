@@ -17,7 +17,6 @@ const STATUS_NOTE: Record<ConnectionStatus, string> = {
   live: "Connected to live feed",
   reconnecting: "Link dropped — retrying…",
   offline: "No feed",
-  demo: "Live feed unreachable — showing simulated wire",
 };
 
 export function StatusBar({

@@ -9,15 +9,13 @@ import {
 } from "./api";
 import {
   ConnectionStatus,
-  WORLD_TOPIC,
   normalizeEvent,
   UpcomeEvent,
   UpcomeWireEvent,
 } from "./types";
-import { makeMockEvent } from "./mockEvents";
 
-/** How many connection attempts before we drop into the in-browser demo feed. */
-const MAX_ATTEMPTS = 3;
+/** Longest delay between reconnect attempts. */
+const MAX_RECONNECT_DELAY_MS = 8000;
 
 interface Options {
   /** Bearer session token used to authenticate the event stream. */
@@ -47,9 +45,7 @@ interface SocketState {
  *  - Opens a websocket to `/user/events?sessionToken=…` and forwards
  *    `{ topic, event, "more-info" }` frames.
  *  - Handles the `connection.ready` control frame.
- *  - Reconnects with exponential backoff on drop.
- *  - After a few failed attempts, falls back to a client-side demo feed so the
- *    terminal is never blank in an environment with no backend.
+ *  - Reconnects to the backend with exponential backoff on drop.
  */
 export function useUpcomeSocket({
   token,
@@ -71,35 +67,12 @@ export function useUpcomeSocket({
 
   const wsRef = useRef<WebSocket | null>(null);
   const attemptsRef = useRef(0);
-  const demoTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const closedByUnmount = useRef(false);
 
   const emit = useCallback((raw: UpcomeWireEvent) => {
     onEventRef.current(normalizeEvent(raw));
     setLastMessageAt(Date.now());
-  }, []);
-
-  // --- In-browser demo feed --------------------------------------------------
-  const startDemo = useCallback(() => {
-    if (demoTimerRef.current) return;
-    setStatus("demo");
-    const tick = () => {
-      // Always surface world news; sprinkle in the user's other interests.
-      const others = interestsRef.current.filter((t) => t !== WORLD_TOPIC);
-      const topics = [WORLD_TOPIC, WORLD_TOPIC, ...others];
-      const topic = topics[Math.floor(Math.random() * topics.length)];
-      emit(makeMockEvent(topic));
-    };
-    tick();
-    demoTimerRef.current = setInterval(tick, 2600);
-  }, [emit]);
-
-  const stopDemo = useCallback(() => {
-    if (demoTimerRef.current) {
-      clearInterval(demoTimerRef.current);
-      demoTimerRef.current = null;
-    }
   }, []);
 
   // --- Live WebSocket --------------------------------------------------------
@@ -122,7 +95,6 @@ export function useUpcomeSocket({
 
       ws.onopen = () => {
         attemptsRef.current = 0;
-        stopDemo();
         setStatus("live");
       };
 
@@ -167,12 +139,11 @@ export function useUpcomeSocket({
 
     function handleFailure() {
       attemptsRef.current += 1;
-      if (attemptsRef.current >= MAX_ATTEMPTS) {
-        startDemo();
-        return;
-      }
       setStatus("reconnecting");
-      const delay = Math.min(1000 * 2 ** attemptsRef.current, 8000);
+      const delay = Math.min(
+        1000 * 2 ** attemptsRef.current,
+        MAX_RECONNECT_DELAY_MS
+      );
       reconnectTimerRef.current = setTimeout(connect, delay);
     }
 
@@ -181,7 +152,6 @@ export function useUpcomeSocket({
     return () => {
       closedByUnmount.current = true;
       if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
-      stopDemo();
       try {
         wsRef.current?.close();
       } catch {
@@ -189,7 +159,7 @@ export function useUpcomeSocket({
       }
       wsRef.current = null;
     };
-  }, [token, emit, startDemo, stopDemo]);
+  }, [token, emit]);
 
   // --- Interest registration (HTTP) -----------------------------------------
   // Interests are registered over HTTP, not the websocket. Track what we've

@@ -1,6 +1,6 @@
 # Auth API
 
-The API runs at `http://localhost:7070` by default. Set the `PORT` environment variable to use a different port.
+The client reaches the Upcome backend at the base URL configured with `NEXT_PUBLIC_UPCOME_API_URL`.
 
 Requests and responses use JSON. Protected HTTP endpoints require this header:
 
