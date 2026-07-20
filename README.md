@@ -51,18 +51,20 @@ over the websocket — opening a column calls `POST /user/interests` instead.
 
 ## Getting started
 
-```bash
-npm install
+The terminal talks to a running Upcome backend — point it at yours before
+starting. Copy `.env.example` to `.env.local` and set the URL:
 
-# Run the app + the bundled mock backend together:
-npm run dev:all
-# → http://localhost:3000  (backend: http://localhost:7070)
+```bash
+NEXT_PUBLIC_UPCOME_API_URL=https://api.your-upcome-host.io
 ```
 
-Or run them separately:
+> `NEXT_PUBLIC_*` values are inlined at build time — set the backend URL
+> before `npm run build`.
+
+Then install and run the dev server:
 
 ```bash
-npm run mock   # mock Upcome backend on http://localhost:7070
+npm install
 npm run dev    # Next.js dev server on http://localhost:3000
 ```
 
@@ -71,25 +73,13 @@ npm run dev    # Next.js dev server on http://localhost:3000
 The terminal opens on a login screen:
 
 1. Enter your email and press **Send login code**.
-2. Read the 6-digit code from your inbox — or, with the bundled mock backend,
-   from the **`npm run mock` terminal output** (it prints each code instead of
-   emailing it).
+2. Read the 6-digit code from your inbox.
 3. Enter the code to unlock the terminal. Your session is stored in
    `localStorage`; use **Logout** in the header to end it.
 
-### Pointing at a real backend
-
-Set the backend URL (copy `.env.example` to `.env.local`):
-
-```bash
-NEXT_PUBLIC_UPCOME_API_URL=https://api.your-upcome-host.io
-```
-
-> `NEXT_PUBLIC_*` values are inlined at build time — set it before `npm run build`.
-
-If the event stream can't be reached after a few attempts, the terminal drops
-into a built-in **demo feed** (generated in the browser) so it's never blank —
-the status pill in the header shows `DEMO FEED` when that happens.
+If the event stream can't be reached, the terminal keeps reconnecting to the
+backend with exponential backoff — the status pill in the header shows
+`RECONNECTING` until the feed comes back.
 
 ## Using the terminal
 
@@ -107,7 +97,6 @@ feed URL, column/event counts, and time since the last message.
 ## Project layout
 
 ```
-server/mock-backend.mjs     Mock Upcome backend (Auth API + events websocket)
 src/app/                    App Router entry, layout, global theme
 src/components/
   AuthGate.tsx              Shows the login screen until authenticated
@@ -120,9 +109,8 @@ src/lib/
   api.ts                    Backend client: login, session (JWT), interests
   auth.tsx                  Auth context + persisted session (useAuth)
   types.ts                  Wire + internal types, event normalization
-  useUpcomeSocket.ts        Authenticated feed: interests, reconnect, demo
+  useUpcomeSocket.ts        Authenticated feed: interests, reconnect
   useNotificationSound.ts   Synthesised terminal alert chime + mute toggle
-  mockEvents.ts             Headline catalog for the in-browser demo feed
 ```
 
 ## Production build

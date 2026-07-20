@@ -1,6 +1,6 @@
 # Auth API
 
-The API runs at `http://localhost:7070` by default. Set the `PORT` environment variable to use a different port.
+The client reaches the Upcome backend at the base URL configured with `NEXT_PUBLIC_UPCOME_API_URL`.
 
 Requests and responses use JSON. Protected HTTP endpoints require this header:
 
@@ -58,6 +58,11 @@ Success — `200 OK`:
   "tokenType": "Bearer"
 }
 ```
+
+The JWT is cached per user and reused for its whole lifetime: verifying a code
+again while a previously issued token is still valid returns that same token
+rather than minting a new one. A fresh JWT is only signed once the cached one
+has expired.
 
 Errors:
 

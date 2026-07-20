@@ -11,7 +11,6 @@ const STATUS_META: Record<
   live: { label: "LIVE", color: "text-up", dot: true },
   reconnecting: { label: "RECONNECTING", color: "text-amber", dot: false },
   offline: { label: "OFFLINE", color: "text-down", dot: false },
-  demo: { label: "DEMO FEED", color: "text-info", dot: true },
 };
 
 function SoundIcon({ muted }: { muted: boolean }) {
@@ -93,8 +92,6 @@ export function TopBar({
             } ${
               status === "live"
                 ? "bg-up"
-                : status === "demo"
-                ? "bg-info"
                 : status === "offline"
                 ? "bg-down"
                 : "bg-amber"
