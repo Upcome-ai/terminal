@@ -55,7 +55,7 @@ The terminal talks to a running Upcome backend — point it at yours before
 starting. Copy `.env.example` to `.env.local` and set the URL:
 
 ```bash
-NEXT_PUBLIC_UPCOME_API_URL=https://api.your-upcome-host.io
+NEXT_PUBLIC_UPCOME_API_URL=https://backend.upcome.ai
 ```
 
 > `NEXT_PUBLIC_*` values are inlined at build time — set the backend URL

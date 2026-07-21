@@ -2,14 +2,14 @@
  * HTTP client for the Upcome Auth API.
  *
  * The backend base URL is configured with `NEXT_PUBLIC_UPCOME_API_URL`
- * (default `http://localhost:7070`). It exposes passwordless email login,
+ * (default `https://backend.upcome.ai`). It exposes passwordless email login,
  * the user's topic interests, and an authenticated event websocket.
  *
  * See `docs`/the Auth API reference for the full contract.
  */
 
 const RAW_API_BASE =
-  process.env.NEXT_PUBLIC_UPCOME_API_URL ?? "http://localhost:7070";
+  process.env.NEXT_PUBLIC_UPCOME_API_URL ?? "https://backend.upcome.ai";
 
 /** Backend base URL with any trailing slashes stripped. */
 export const API_BASE = RAW_API_BASE.replace(/\/+$/, "");
